@@ -1,0 +1,13 @@
+# Exclude dev artifacts from Docker build context
+node_modules
+.next
+.git
+.idea
+.vscode
+coverage
+tests
+*.log
+Dockerfile*
+docker-compose.*
+*.local
+

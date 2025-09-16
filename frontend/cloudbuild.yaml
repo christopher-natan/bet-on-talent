@@ -1,0 +1,81 @@
+# Cloud Build: Docker BuildKit cache + Cloud Run deploy
+# Single command: gcloud builds submit --config cloudbuild.yaml
+
+substitutions:
+  _REGION: "asia-southeast1"
+  _AR_REPO: "betontalent-frontend"
+  _SERVICE: "betontalent-frontend"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  # Ensure Artifact Registry repo exists (ignore error if already exists)
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - -ceu
+      - |
+        set -euo pipefail
+        if ! gcloud artifacts repositories describe "$_AR_REPO" --location="$_REGION" >/dev/null 2>&1; then
+          echo "Artifact Registry repo '$_AR_REPO' not found in region '$_REGION'. Creating..."
+          gcloud artifacts repositories create "$_AR_REPO" \
+            --repository-format=docker \
+            --location="$_REGION" \
+            --description="Frontend images"
+          echo "Repo created."
+        else
+          echo "Artifact Registry repo '$_AR_REPO' exists."
+        fi
+
+  # Pull latest image to seed build cache (ignore if not found)
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - >-
+        docker pull $_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:latest || true
+
+  # Build the Docker image (tag to Artifact Registry) with inline cache
+  - name: 'gcr.io/cloud-builders/docker'
+    env: ['DOCKER_BUILDKIT=1']
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'BUILDKIT_INLINE_CACHE=1'
+      - '--cache-from'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:latest'
+      - '-t'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:$BUILD_ID'
+      - '-t'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:latest'
+      - '.'
+
+  # Push the Docker image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:$BUILD_ID'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:latest'
+
+  # Deploy to Cloud Run (from Artifact Registry)
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '$_SERVICE'
+      - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:$BUILD_ID'
+      - '--region=$_REGION'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--port=8080'
+      - '--ingress=all'
+
+# Store images in Artifact Registry
+images:
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:$BUILD_ID'
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:latest'
