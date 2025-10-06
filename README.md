@@ -1,7 +1,12 @@
-# BetOnTalent – Full‑Stack App
+# BetOnTalent – Full-Stack App
 
-A NestJS backend (REST API with PostgreSQL + JWT) and a Next.js frontend.
+A NestJS backend (REST API with PostgreSQL + JWT) and a Next.js frontend.  
+
 **🔗 Live Demo:** [https://betontalent-frontend-456426830316.asia-southeast1.run.app/](https://betontalent-frontend-456426830316.asia-southeast1.run.app/)
+
+**🔑 Demo Login:**  
+- **Email:** prod@betontalent.com  
+- **Password:** admin
 
 ## Quick Start
 
